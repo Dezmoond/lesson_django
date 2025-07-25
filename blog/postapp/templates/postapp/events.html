@@ -26,9 +26,9 @@
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:index' %}">Главная</a></li>
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:events' %}">Мероприятия</a></li>
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:archive' %}">Прошедшие </a></li>
+                        <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:ensembles_list' %}">Коллективы</a></li> {# НОВАЯ ССЫЛКА #}
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:create' %}">Добавить</a></li>
-                        <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:contact' %}">Контакты</a></li>
-                    </ul>
+                        <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:contact' %}">Контакты</a></li></ul>
                 </div>
             </div>
         </nav>
@@ -82,41 +82,48 @@
                     <hr class="my-4" />
 
                     <h2 class="section-heading">Предстоящие мероприятия</h2>
-                    {% if events %}
-                        {% for event in events %}
-                            <div class="post-preview">
-                                {% if event.image %}
-                                    <img src="{{ event.image.url }}" alt="{{ event.name }}" class="img-fluid mb-3" style="max-width: 100%; height: auto; border-radius: 8px;">
+                        {% if events %}
+                            {% for event in events %}
+                                <div class="post-preview">
+                                    <a href="{% url 'blog:event_detail' event.slug %}"> {# <--- ИЗМЕНЕНО: Ссылка на детальную страницу #}
+
+                                        {# ДОБАВЬТЕ ЭТОТ БЛОК ДЛЯ ОТОБРАЖЕНИЯ ИЗОБРАЖЕНИЯ #}
+                                        {% if event.image %}
+                                            <img src="{{ event.image.url }}" alt="{{ event.name }}" style="width: 150px; height: auto; float: left; margin-right: 15px;">
+                                        {% else %}
+                                            {# Запасное изображение, если у мероприятия нет своего #}
+                                            <img src="{% static 'assets/img/default-event-thumbnail.jpg' %}" alt="Без изображения" style="width: 150px; height: auto; float: left; margin-right: 15px;">
+                                        {% endif %}
+                                        {# КОНЕЦ БЛОКА ИЗОБРАЖЕНИЯ #}
+
+                                        <h2 class="post-title">{{ event.name }}</h2>
+                                        <h3 class="post-subtitle">{{ event.description|truncatechars:150 }}</h3>
+                                    </a>
+                                    <p class="post-meta">
+                                        Категория: {{ event.category|capfirst }}
+                                        <br>
+                                        Дата: {{ event.date|date:"d M Y" }} в {{ event.time|time:"H:i" }}
+                                        {% if event.venue %}
+                                            <br>
+                                            Место: {{ event.venue.name }}
+                                        {% endif %}
+                                        {% if event.ensembles.all %}
+                                            <br>
+                                            Коллективы:
+                                            {% for ensemble in event.ensembles.all %}
+                                                {{ ensemble.name }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                    </p>
+                                </div>
+
+                                {% if not forloop.last %}
+                                    <hr class="my-4" />
                                 {% endif %}
-                                <a href="#"> {# Здесь можно добавить ссылку на детальную страницу события, если она будет #}
-                                    <h2 class="post-title">{{ event.name }}</h2>
-                                    <h3 class="post-subtitle">{{ event.category|capfirst }}</h3>
-                                </a>
-                                <p class="post-meta">
-                                    Дата: {{ event.date|date:"d F Y" }} | Время: {{ event.time|time:"H:i" }}
-                                    {% if event.venue %}
-                                        | Место: {{ event.venue.name }}
-                                    {% endif %}
-                                    {% if event.ensembles.all %}
-                                        | Коллективы:
-                                        {% for ensemble in event.ensembles.all %}
-                                            {{ ensemble.name }}{% if not forloop.last %}, {% endif %}
-                                        {% endfor %}
-                                    {% endif %}
-                                </p>
-                                <p>{{ event.description|truncatechars:300 }}</p>
-                                <p>Цена: {{ event.price }}</p>
-                                {% if event.ticket_url %}
-                                    <p><a href="{{ event.ticket_url }}" class="btn btn-success btn-sm" target="_blank" rel="noopener noreferrer">Купить билет</a></p>
-                                {% endif %}
-                            </div>
-                            {% if not forloop.last %}
-                                <hr class="my-4" />
-                            {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        <p>На данный момент нет предстоящих мероприятий, соответствующих вашим критериям.</p>
-                    {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            <p>На данный момент нет предстоящих мероприятий, соответствующих вашим критериям.</p>
+                        {% endif %}
                 </div>
             </div>
         </div>

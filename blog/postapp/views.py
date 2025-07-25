@@ -1,161 +1,194 @@
-# blog/postapp/views.py
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, reverse
+from django.views.generic import TemplateView, ListView, CreateView, DetailView, FormView
+
 from django.db.models import Q
-from django.urls import reverse
-from datetime import date, datetime, time
+from datetime import date, datetime
+from django.contrib import messages
+from .models import Event, EventCategory, Ensemble, Venue
 
-# Импортируйте ваши модели и формы
-from .models import Event, Ensemble, Venue
-from .forms import ContactForm, EventForm # Эти файлы forms.py нужно будет создать
+from .forms import EventForm, ContactForm
 
-# 1. Новая функция для пустой главной страницы (если она действительно должна быть пустой)
-# 1. Функция для "Главной" страницы (статический контент из postapp/index.html)
-def main_landing_view(request):
-    """
-    Представляет главную страницу, которая является статической.
-    """
-    # Этот шаблон должен быть blog/postapp/templates/postapp/index.html
-    return render(request, 'postapp/index.html', {})
+# =========================================================
+# 1. Class-Based Views для существующих страниц
+# =========================================================
 
-# 2. Функция для "Мероприятий" (текущие с сортировкой)
-def main_view(request):
-    """
-    Представляет предстоящие мероприятия с фильтрацией и сортировкой.
-    """
-    events = Event.objects.all()
-    today = date.today()
+# Главная страница (index.html)
+class IndexView(TemplateView):
+    template_name = 'postapp/index.html'
 
-    # Фильтрация по предстоящим событиям (уже есть, убеждаемся, что она на месте)
-    events = events.filter(Q(date__gt=today) | Q(date=today, time__gte=datetime.now().time()))
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Здесь вы можете добавить любой динамический контент для главной страницы, если понадобится
+        # Например, последние 3 мероприятия
+        context['latest_events'] = Event.objects.filter(
+            Q(date__gt=date.today()) | (Q(date=date.today()) & Q(time__gte=datetime.now().time()))
+        ).order_by('date', 'time')[:3]
+        return context
 
-    # Фильтрация по диапазону дат
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
 
-    if start_date_str:
-        try:
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-            events = events.filter(date__gte=start_date)
-        except ValueError:
-            pass
+# Страница со списком предстоящих мероприятий
+class EventsView(ListView):
+    model = Event
+    template_name = 'postapp/events.html'
+    context_object_name = 'events'
+    ordering = ['date', 'time']
+    paginate_by = 10
 
-    if end_date_str:
-        try:
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            events = events.filter(date__lte=end_date)
-        except ValueError:
-            pass
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        today = date.today()
+        now = datetime.now().time()
 
-    # Фильтрация по организациям (Ensemble)
-    selected_ensembles = request.GET.getlist('ensembles')
-    if selected_ensembles:
-        events = events.filter(ensembles__name__in=selected_ensembles).distinct()
+        queryset = queryset.filter(Q(date__gt=today) | (Q(date=today) & Q(time__gte=now)))
 
-    # НОВОЕ: Фильтрация по площадкам (Venue)
-    selected_venue = request.GET.get('venue')
-    if selected_venue:
-        events = events.filter(venue__name=selected_venue) # Фильтруем по имени площадки
+        # Применяем фильтр по категории
+        category_filter = self.request.GET.get('category')
+        if category_filter and category_filter != 'all':
+            queryset = queryset.filter(category=category_filter)
 
-    # Сортировка: сначала по дате, затем по времени
-    events = events.order_by('date', 'time')
+        # НОВОЕ: Применяем фильтр по коллективу
+        ensemble_filter_id = self.request.GET.get('ensemble')
+        if ensemble_filter_id and ensemble_filter_id != 'all':
+            # ensemble__id для фильтрации ManyToManyField по ID
+            queryset = queryset.filter(ensembles__id=ensemble_filter_id)
 
-    all_ensembles = Ensemble.objects.all().order_by('name')
-    all_venues = Venue.objects.all().order_by('name') # Получаем все площадки для фильтра
+            # НОВОЕ: Применяем фильтр по площадке
+        venue_filter_id = self.request.GET.get('venue')
+        if venue_filter_id and venue_filter_id != 'all':
+            # venue__id для фильтрации ForeignKey по ID
+            queryset = queryset.filter(venue__id=venue_filter_id)
 
-    context = {
-        'events': events,
-        'all_ensembles': all_ensembles,
-        'all_venues': all_venues, # Передаем все площадки в шаблон
-        'selected_ensembles': selected_ensembles,
-        'selected_start_date': start_date_str,
-        'selected_end_date': end_date_str,
-        'selected_venue': selected_venue, # Передаем выбранную площадку в шаблон
-    }
-    # Этот шаблон должен быть blog/postapp/templates/postapp/events.html
-    return render(request, 'postapp/events.html', context)
+        # Убедимся, что результаты уникальны, если фильтруем по ManyToMany (ensembles)
+        # Это может вернуть дубликаты, если одно событие имеет несколько ансамблей,
+        # и оба соответствуют фильтру, или если событие соответствует нескольким ансамблям.
+        # .distinct() поможет избежать дубликатов в результирующем QuerySet.
+        queryset = queryset.distinct()
 
-# 3. Функция для "Прошедшие" (архив с сортировкой)
-def past_events_view(request):
-    """
-    Представляет прошедшие мероприятия с фильтрацией и сортировкой.
-    """
-    events = Event.objects.all()
-    today = date.today()
-    current_time = datetime.now().time()
+        return queryset
 
-    # Фильтрация по прошедшим событиям
-    events = events.filter(Q(date__lt=today) | Q(date=today, time__lt=current_time))
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['categories'] = EventCategory.choices
+        context['selected_category'] = self.request.GET.get('category', 'all')
 
-    # Фильтрация по диапазону дат
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
+        # НОВОЕ: Добавляем все коллективы и площадки в контекст
+        context['all_ensembles'] = Ensemble.objects.all().order_by('name')
+        context['selected_ensemble_id'] = self.request.GET.get('ensemble', 'all')
 
-    if start_date_str:
-        try:
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-            events = events.filter(date__gte=start_date)
-        except ValueError:
-            pass
+        context['all_venues'] = Venue.objects.all().order_by('name')
+        context['selected_venue_id'] = self.request.GET.get('venue', 'all')
 
-    if end_date_str:
-        try:
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            events = events.filter(date__lte=end_date)
-        except ValueError:
-            pass
+        return context
 
-    # Фильтрация по организациям (Ensemble)
-    selected_ensembles = request.GET.getlist('ensembles')
-    if selected_ensembles:
-        events = events.filter(ensembles__name__in=selected_ensembles).distinct()
 
-    # НОВОЕ: Фильтрация по площадкам (Venue)
-    selected_venue = request.GET.get('venue')
-    if selected_venue:
-        events = events.filter(venue__name=selected_venue) # Фильтруем по имени площадки
+# Страница с просмотром детальной информации о мероприятии
+class EventDetailView(DetailView):
+    model = Event
+    template_name = 'postapp/event_detail.html'
+    context_object_name = 'event'
+    slug_field = 'slug'  # Используем поле slug для поиска
+    slug_url_kwarg = 'slug'  # Имя параметра в URL
 
-    # Сортировка: сначала по дате (убывание), затем по времени (убывание)
-    events = events.order_by('-date', '-time')
 
-    all_ensembles = Ensemble.objects.all().order_by('name')
-    all_venues = Venue.objects.all().order_by('name') # Получаем все площадки для фильтра
+# Страница с прошедшими мероприятиями (archive.html)
+class ArchiveView(ListView):
+    model = Event
+    template_name = 'postapp/archive.html'
+    context_object_name = 'events'
+    ordering = ['-date', '-time']
+    paginate_by = 10
 
-    context = {
-        'events': events,
-        'all_ensembles': all_ensembles,
-        'all_venues': all_venues, # Передаем все площадки в шаблон
-        'selected_ensembles': selected_ensembles,
-        'selected_start_date': start_date_str,
-        'selected_end_date': end_date_str,
-        'selected_venue': selected_venue, # Передаем выбранную площадку в шаблон
-    }
-    return render(request, 'postapp/archive.html', context)
-def create_event(request):
-    """
-    Позволяет добавлять новые мероприятия через форму.
-    """
-    if request.method == 'POST':
-        form = EventForm(request.POST, request.FILES)
-        if form.is_valid():
-            form.save()
-            return redirect(reverse('blog:events')) # Перенаправляем на страницу с мероприятиями
-    else:
-        form = EventForm()
-    return render(request, 'postapp/create.html', {'form': form})
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        today = date.today()
+        now = datetime.now().time()
 
-# 5. Функция для "Контакты" (форма контактов)
-def contact(request):
-    """
-    Представляет форму контактов и обрабатывает ее отправку.
-    """
-    if request.method == 'POST':
-        form = ContactForm(request.POST)
-        if form.is_valid():
-            # Здесь логика обработки формы (например, отправка email)
-            # print(f"Имя: {form.cleaned_data['name']}")
-            # print(f"Email: {form.cleaned_data['email']}")
-            # print(f"Сообщение: {form.cleaned_data['message']}")
-            return redirect(reverse('blog:index')) # Или на страницу "спасибо"
-    else:
-        form = ContactForm()
-    return render(request, 'postapp/contact.html', {'form': form})
+        queryset = queryset.filter(Q(date__lt=today) | (Q(date=today) & Q(time__lt=now)))
+
+        category_filter = self.request.GET.get('category')
+        if category_filter and category_filter != 'all':
+            queryset = queryset.filter(category=category_filter)
+
+        # НОВОЕ: Применяем фильтр по коллективу
+        ensemble_filter_id = self.request.GET.get('ensemble')
+        if ensemble_filter_id and ensemble_filter_id != 'all':
+            queryset = queryset.filter(ensembles__id=ensemble_filter_id)
+
+        # НОВОЕ: Применяем фильтр по площадке
+        venue_filter_id = self.request.GET.get('venue')
+        if venue_filter_id and venue_filter_id != 'all':
+            queryset = queryset.filter(venue__id=venue_filter_id)
+
+        queryset = queryset.distinct()  # Для избежания дубликатов
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['categories'] = EventCategory.choices
+        context['selected_category'] = self.request.GET.get('category', 'all')
+
+        # НОВОЕ: Добавляем все коллективы и площадки в контекст
+        context['all_ensembles'] = Ensemble.objects.all().order_by('name')
+        context['selected_ensemble_id'] = self.request.GET.get('ensemble', 'all')
+
+        context['all_venues'] = Venue.objects.all().order_by('name')
+        context['selected_venue_id'] = self.request.GET.get('venue', 'all')
+
+        return context
+
+
+# Страница для создания нового мероприятия
+class CreateEventView(CreateView):
+    model = Event
+    form_class = EventForm  # Используем ранее определенную форму
+    template_name = 'postapp/create.html'
+
+    def get_success_url(self):
+        # Перенаправляем на страницу со списком предстоящих мероприятий после успешного создания
+        return reverse('blog:events')
+
+
+class ContactView(FormView):
+    template_name = 'postapp/contact.html'
+    form_class = ContactForm  # Используем нашу новую форму
+
+    # Куда перенаправить пользователя после успешной отправки формы
+    # Можно перенаправить обратно на страницу контактов, но с сообщением
+    def get_success_url(self):
+        return reverse('blog:contact')  # Используем 'blog' namespace
+
+    # Метод, который вызывается, если форма валидна
+    def form_valid(self, form):
+        # Здесь вы можете обработать данные формы:
+        # Например, отправить email, сохранить в базу данных и т.д.
+        name = form.cleaned_data['name']
+        email = form.cleaned_data['email']
+        phone = form.cleaned_data['phone']
+        message_text = form.cleaned_data['message']
+
+        print(f"Получено новое сообщение от {name} ({email}):")
+        print(f"Телефон: {phone if phone else 'Не указан'}")
+        print(f"Сообщение:\n{message_text}")
+
+        # Добавляем сообщение об успешной отправке для пользователя
+        messages.success(self.request, 'Ваше сообщение успешно отправлено! Мы свяжемся с вами в ближайшее время.')
+
+        return super().form_valid(form)  # Вызываем родительский метод для выполнения редиректа
+
+    # Метод, который вызывается, если форма невалидна (например, поле Email неверное)
+    def form_invalid(self, form):
+        messages.error(self.request, 'Пожалуйста, исправьте ошибки в форме.')
+        return super().form_invalid(form)
+
+
+# =========================================================
+# 2. Новая страница: Просмотр коллективов (Ensemble List)
+# =========================================================
+
+class EnsembleListView(ListView):
+    model = Ensemble
+    template_name = 'postapp/ensemble_list.html'  # Создадим шаблон
+    context_object_name = 'ensembles'  # Переменная для доступа к списку коллективов в шаблоне
+    ordering = ['name']  # Сортировка по имени
+    paginate_by = 10

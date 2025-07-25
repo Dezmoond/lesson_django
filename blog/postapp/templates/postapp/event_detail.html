@@ -4,9 +4,9 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-        <meta name="description" content="" />
+        <meta name="description" content="{{ event.description|truncatechars:160 }}" />
         <meta name="author" content="" />
-        <title>Clean Blog - Start Bootstrap Theme</title>
+        <title>{{ event.name }}</title>
         <link rel="icon" type="image/x-icon" href="{% static 'assets/favicon.ico' %}" />
         <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
         <link href="https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic" rel="stylesheet" type="text/css" />
@@ -16,7 +16,7 @@
     <body>
         <nav class="navbar navbar-expand-lg navbar-light" id="mainNav">
             <div class="container px-4 px-lg-5">
-                <a class="navbar-brand" href="{% url 'blog:index' %}">Афиша города</a> {# Обновлено href #}
+                <a class="navbar-brand" href="{% url 'blog:index' %}">Афиша города</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
                     Menu
                     <i class="fas fa-bars"></i>
@@ -26,38 +26,56 @@
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:index' %}">Главная</a></li>
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:events' %}">Мероприятия</a></li>
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:archive' %}">Прошедшие </a></li>
-                        <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:ensembles_list' %}">Коллективы</a></li> {# НОВАЯ ССЫЛКА #}
+                        <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:ensembles_list' %}">Коллективы</a></li>
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:create' %}">Добавить</a></li>
-                        <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:contact' %}">Контакты</a></li></ul>
+                        <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:contact' %}">Контакты</a></li>
+                    </ul>
                 </div>
             </div>
         </nav>
-        <header class="masthead" style="background-image: url('{% static 'assets/img/home-bg.jpg' %}')">
+        <header class="masthead" style="background-image: url('{% if event.image %}{{ event.image.url }}{% else %}{% static 'assets/img/post-bg.jpg' %}{% endif %}')">
             <div class="container position-relative px-4 px-lg-5">
                 <div class="row gx-4 gx-lg-5 justify-content-center">
                     <div class="col-md-10 col-lg-8 col-xl-7">
-                        <div class="site-heading">
-                            <h1>Контакты</h1> {# Изменено на "Контакты" #}
-                            <span class="subheading">Свяжитесь с нами</span> {# Подзаголовок #}
+                        <div class="post-heading">
+                            <h1>{{ event.name }}</h1>
+                            <h2 class="subheading">{{ event.category|capfirst }} - {{ event.date|date:"d M Y" }} в {{ event.time|time:"H:i" }}</h2>
+                            {% if event.venue %}<span class="meta">Место: {{ event.venue.name }}</span>{% endif %}
+                            {% if event.ensembles.all %}
+                                <span class="meta d-block">Коллективы:
+                                    {% for ensemble in event.ensembles.all %}
+                                        {{ ensemble.name }}{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                </span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
             </div>
         </header>
-        <div class="container px-4 px-lg-5">
-            <div class="row gx-4 gx-lg-5 justify-content-center">
-                <div class="col-md-10 col-lg-8 col-xl-7">
-                    <p>Хотите связаться? Заполните форму ниже, чтобы отправить нам сообщение, и мы свяжемся с вами в кратчайшие сроки!</p>
-                    <div class="my-5">
-                        <form method="post">
-                            {% csrf_token %} {# Важно для безопасности Django #}
-                            {{ form.as_p }} {# Выводит каждое поле формы в абзаце. Для Bootstrap стилей можно использовать form.as_ul или form.as_table, или рендерить поля вручную. #}
-                            <div class="d-grid"><button class="btn btn-primary text-uppercase" type="submit">Отправить</button></div>
-                        </form>
+        <article class="mb-4">
+            <div class="container px-4 px-lg-5">
+                <div class="row gx-4 gx-lg-5 justify-content-center">
+                    <div class="col-md-10 col-lg-8 col-xl-7">
+                        <p>{{ event.description|linebreaksbr }}</p> {# Отображение описания с переносами строк #}
+
+                        {% if event.price %}
+                            <p><strong>Цена:</strong> {{ event.price }}</p>
+                        {% endif %}
+
+                        {% if event.ticket_url %}
+                            <p><a href="{{ event.ticket_url }}" target="_blank" class="btn btn-primary">Купить билет</a></p>
+                        {% endif %}
+
+                        <hr class="my-4" />
+                        <div class="d-flex justify-content-between">
+                             <a href="javascript:history.back()" class="btn btn-secondary">← Назад</a>
+                             <a href="{% url 'blog:events' %}" class="btn btn-info">Все мероприятия</a>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </article>
         <footer class="border-top">
             <div class="container px-4 px-lg-5">
                 <div class="row gx-4 gx-lg-5 justify-content-center">

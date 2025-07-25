@@ -2,13 +2,13 @@ from django import forms
 from .models import Event, Ensemble, Venue
 
 class ContactForm(forms.Form):
-    """
-    Форма для страницы контактов.
-    """
-    name = forms.CharField(max_length=100, label="Ваше имя")
-    email = forms.EmailField(label="Ваш email")
-    message = forms.CharField(widget=forms.Textarea, label="Ваше сообщение")
-
+    name = forms.CharField(label="Ваше имя", max_length=100,
+                           widget=forms.TextInput(attrs={'placeholder': 'Введите ваше имя'}))
+    email = forms.EmailField(label="Ваш Email",
+                             widget=forms.EmailInput(attrs={'placeholder': 'name@example.com'}))
+    phone = forms.CharField(label="Номер телефона (необязательно)", max_length=20, required=False,
+                            widget=forms.TextInput(attrs={'placeholder': 'Введите ваш телефон (необязательно)'}))
+    message = forms.CharField(label="Сообщение", widget=forms.Textarea(attrs={'rows': 5, 'placeholder': 'Введите ваше сообщение здесь'}))
 
 class EventForm(forms.ModelForm):
     ensembles = forms.ModelMultipleChoiceField(

@@ -1,12 +1,16 @@
-{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% load static %}
 <!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-        <meta name="description" content="" />
+        <meta name="description" content="Список музыкальных и театральных коллективов" />
         <meta name="author" content="" />
-        <title>Clean Blog - Start Bootstrap Theme</title>
+        <title>Наши коллективы</title>
         <link rel="icon" type="image/x-icon" href="{% static 'assets/favicon.ico' %}" />
         <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
         <link href="https://fonts.googleapis.com/css?family=Lora:400,700,400italic,700italic" rel="stylesheet" type="text/css" />
@@ -16,7 +20,7 @@
     <body>
         <nav class="navbar navbar-expand-lg navbar-light" id="mainNav">
             <div class="container px-4 px-lg-5">
-                <a class="navbar-brand" href="{% url 'blog:index' %}">Афиша города</a> {# Обновлено href #}
+                <a class="navbar-brand" href="{% url 'blog:index' %}">Афиша города</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
                     Menu
                     <i class="fas fa-bars"></i>
@@ -28,7 +32,8 @@
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:archive' %}">Прошедшие </a></li>
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:ensembles_list' %}">Коллективы</a></li> {# НОВАЯ ССЫЛКА #}
                         <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:create' %}">Добавить</a></li>
-                        <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:contact' %}">Контакты</a></li></ul>
+                        <li class="nav-item"><a class="nav-link px-lg-3 py-3 py-lg-4" href="{% url 'blog:contact' %}">Контакты</a></li>
+                    </ul>
                 </div>
             </div>
         </nav>
@@ -37,8 +42,8 @@
                 <div class="row gx-4 gx-lg-5 justify-content-center">
                     <div class="col-md-10 col-lg-8 col-xl-7">
                         <div class="site-heading">
-                            <h1>Контакты</h1> {# Изменено на "Контакты" #}
-                            <span class="subheading">Свяжитесь с нами</span> {# Подзаголовок #}
+                            <h1>Наши коллективы</h1>
+                            <span class="subheading">Узнайте больше о творческих группах</span>
                         </div>
                     </div>
                 </div>
@@ -47,14 +52,43 @@
         <div class="container px-4 px-lg-5">
             <div class="row gx-4 gx-lg-5 justify-content-center">
                 <div class="col-md-10 col-lg-8 col-xl-7">
-                    <p>Хотите связаться? Заполните форму ниже, чтобы отправить нам сообщение, и мы свяжемся с вами в кратчайшие сроки!</p>
-                    <div class="my-5">
-                        <form method="post">
-                            {% csrf_token %} {# Важно для безопасности Django #}
-                            {{ form.as_p }} {# Выводит каждое поле формы в абзаце. Для Bootstrap стилей можно использовать form.as_ul или form.as_table, или рендерить поля вручную. #}
-                            <div class="d-grid"><button class="btn btn-primary text-uppercase" type="submit">Отправить</button></div>
-                        </form>
-                    </div>
+                    {% if ensembles %}
+                        {% for ensemble in ensembles %}
+                            <div class="post-preview">
+                                {# Если у коллективов будет своя детальная страница, можно добавить ссылку #}
+                                {# <a href="{% url 'blog:ensemble_detail' ensemble.slug %}"> #}
+                                <h2 class="post-title">{{ ensemble.name }}</h2>
+                                {# </a> #}
+                                {% if ensemble.description %}
+                                    <h3 class="post-subtitle">{{ ensemble.description|truncatechars:150 }}</h3>
+                                {% endif %}
+                                {# Дополнительная информация о коллективе, если есть #}
+                            </div>
+                            {% if not forloop.last %}<hr class="my-4" />{% endif %}
+                        {% endfor %}
+
+                        {# Пагинация, если включена #}
+                        {% if is_paginated %}
+                            <div class="d-flex justify-content-between mb-4">
+                                {% if page_obj.has_previous %}
+                                    <a class="btn btn-primary text-uppercase" href="?page={{ page_obj.previous_page_number }}">← Новее</a>
+                                {% else %}
+                                    <span class="btn btn-primary text-uppercase disabled">← Новее</span>
+                                {% endif %}
+                                <span class="current-page">
+                                    Страница {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}
+                                </span>
+                                {% if page_obj.has_next %}
+                                    <a class="btn btn-primary text-uppercase" href="?page={{ page_obj.next_page_number }}">Старше →</a>
+                                {% else %}
+                                    <span class="btn btn-primary text-uppercase disabled">Старше →</span>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+
+                    {% else %}
+                        <p>На данный момент нет информации о коллективах.</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -96,4 +130,9 @@
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
         <script src="{% static 'js/scripts.js' %}"></script>
     </body>
+</html></title>
+</head>
+<body>
+
+</body>
 </html>
