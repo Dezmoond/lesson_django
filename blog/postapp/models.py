@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.text import slugify
 
 # Категории событий
 class EventCategory(models.TextChoices):
@@ -57,11 +58,45 @@ class Event(models.Model):
     time = models.TimeField("Время")
     price = models.CharField("Цена", max_length=50)
     description = models.TextField("Описание события")
-    ticket_url = models.CharField("Купить билет", max_length=500)
-    image = models.ImageField("Изображение", upload_to="events/", blank=True)
-    ensembles = models.ManyToManyField(Ensemble, verbose_name="Коллектив")
-    venue = models.ForeignKey(Venue, on_delete=models.CASCADE, verbose_name="Место проведения")
-    festival = models.ForeignKey(Festival, on_delete=models.CASCADE, null=True, blank=True, verbose_name="Фестиваль")
+    ticket_url = models.CharField("Купить билет", max_length=500, blank=True, null=True) # Добавил blank/null, если поле может быть пустым
+    image = models.ImageField("Изображение", upload_to="events/", blank=True, null=True) # Добавил blank/null
+    ensembles = models.ManyToManyField(Ensemble, verbose_name="Коллектив", blank=True) # Добавил blank=True
+    venue = models.ForeignKey(Venue, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Место проведения") # Добавил blank=True
+    
+    # Связь с пользователем, создавшим событие
+    created_by = models.ForeignKey(
+        'users.CustomUser',
+        on_delete=models.CASCADE,
+        verbose_name="Создатель события",
+        null=True,
+        blank=True
+    )
+
+    # НОВОЕ ПОЛЕ: slug
+    slug = models.SlugField(unique=True, max_length=255, blank=True) # Добавляем slug
+
+    class Meta:
+        verbose_name = "Событие"
+        verbose_name_plural = "События"
+        ordering = ['date', 'time'] # Порядок по умолчанию
 
     def __str__(self):
-        return f"{self.name} ({self.date})"
+        return self.name
+
+    # НОВЫЙ МЕТОД: Сохранение slug при сохранении объекта
+    def save(self, *args, **kwargs):
+        if not self.slug: # Если slug еще не заполнен
+            # Генерируем slug из названия события
+            # Добавляем дату к названию, чтобы slug был уникален, если названия событий повторяются в разные даты
+            base_slug = slugify(self.name)
+            # Добавляем год-месяц-день к slug для лучшей уникальности
+            date_suffix = self.date.strftime('-%Y-%m-%d') if self.date else ''
+            self.slug = f"{base_slug}{date_suffix}"
+
+            # Проверяем уникальность slug. Если такой slug уже есть, добавляем счетчик
+            original_slug = self.slug
+            counter = 1
+            while Event.objects.filter(slug=self.slug).exists():
+                self.slug = f"{original_slug}-{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
