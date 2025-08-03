@@ -43,9 +43,33 @@ def download_image(url):
     try:
         response = requests.get(url)
         if response.status_code == 200:
-            return ContentFile(response.content, name=os.path.basename(url))
+            original_filename = os.path.basename(url)
+
+            # Regex для поиска .<расширение><цифры в конце строки>
+            match = re.search(r'\.(\w+)(\d+)$', original_filename)
+
+            if match:
+                # Извлекаем расширение (например, 'jpg')
+                extension = match.group(1)
+                # Извлекаем цифровую приставку (например, '1751004087')
+                numeric_suffix = match.group(2)
+                # Получаем часть имени файла до расширения и цифровой приставки
+                base_name_part = original_filename[:match.start()]
+
+                # Формируем желаемое имя файла: "базовое_имя-приставка.расширение"
+                cleaned_filename = f"{base_name_part}-{numeric_suffix}.{extension}"
+            else:
+                # Если шаблон не найден (например, нет цифровой приставки), используем исходное имя
+                cleaned_filename = original_filename
+
+            # Также обрабатываем возможные параметры запроса (например, image.jpg?v=123),
+            # если они вдруг появятся после преобразования или в исходном имени
+            if '?' in cleaned_filename:
+                cleaned_filename = cleaned_filename.split('?')[0]
+
+            return ContentFile(response.content, name=cleaned_filename)
     except Exception as e:
-        print(f"Ошибка загрузки изображения: {e}")
+        print(f"Ошибка загрузки изображения из {url}: {e}")
     return None
 
 

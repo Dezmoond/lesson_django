@@ -104,6 +104,10 @@ class ArchiveView(LoginRequiredMixin, ListView):
         today = date.today()
         now = datetime.now().time()
 
+        # Фильтруем только события текущего пользователя
+        queryset = queryset.filter(created_by=self.request.user)
+        
+        # Фильтруем только прошедшие события
         queryset = queryset.filter(Q(date__lt=today) | (Q(date=today) & Q(time__lt=now)))
 
         category_filter = self.request.GET.get('category')
