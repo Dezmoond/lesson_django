@@ -5,7 +5,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from datetime import date, datetime
 from django.contrib import messages
-from .models import Event, EventCategory, Ensemble, Venue
+from .models import Event, EventCategory, Ensemble, Venue, News
 
 from .forms import EventForm, ContactForm
 
@@ -19,11 +19,14 @@ class IndexView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Здесь вы можете добавить любой динамический контент для главной страницы, если понадобится
-        # Например, последние 3 мероприятия
+        # Последние 3 мероприятия
         context['latest_events'] = Event.objects.filter(
             Q(date__gt=date.today()) | (Q(date=date.today()) & Q(time__gte=datetime.now().time()))
         ).order_by('date', 'time')[:3]
+        
+        # Последние 5 опубликованных новостей
+        context['latest_news'] = News.objects.filter(is_published=True).order_by('-published_at')[:5]
+        
         return context
 
 
@@ -202,3 +205,44 @@ class EnsembleListView(ListView):
     context_object_name = 'ensembles'  # Переменная для доступа к списку коллективов в шаблоне
     ordering = ['name']  # Сортировка по имени
     paginate_by = 10
+
+# =========================================================
+# 3. Новостные views
+# =========================================================
+
+class NewsListView(ListView):
+    model = News
+    template_name = 'postapp/news_list.html'
+    context_object_name = 'news_list'
+    ordering = ['-published_at']
+    paginate_by = 8
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # Показываем только опубликованные новости
+        queryset = queryset.filter(is_published=True)
+        
+        # Фильтр по категории
+        category_filter = self.request.GET.get('category')
+        if category_filter and category_filter != 'all':
+            queryset = queryset.filter(category=category_filter)
+            
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from .models import NewsCategory
+        context['categories'] = NewsCategory.choices
+        context['selected_category'] = self.request.GET.get('category', 'all')
+        return context
+
+class NewsDetailView(DetailView):
+    model = News
+    template_name = 'postapp/news_detail.html'
+    context_object_name = 'news'
+    slug_field = 'slug'
+    slug_url_kwarg = 'slug'
+    
+    def get_queryset(self):
+        # Показываем только опубликованные новости
+        return News.objects.filter(is_published=True)

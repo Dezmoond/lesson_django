@@ -11,4 +11,6 @@ urlpatterns = [
     path('create/', views.CreateEventView.as_view(), name='create'),
     path('contact/', views.ContactView.as_view(), name='contact'),
     path('ensembles/', views.EnsembleListView.as_view(), name='ensembles_list'),
+    path('news/', views.NewsListView.as_view(), name='news_list'), # Список новостей
+    path('news/<slug:slug>/', views.NewsDetailView.as_view(), name='news_detail'), # Детальная страница новости
 ]
