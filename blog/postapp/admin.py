@@ -13,6 +13,8 @@ class EventAdmin(admin.ModelAdmin):
     search_fields = ('name', 'description')
     ordering = ('date', 'time')
     actions = [run_parser]  # Добавляем кнопку в раздел "Мероприятия"
+    list_select_related = ('venue', 'created_by')
+    list_prefetch_related = ('ensembles',)
     
     def save_model(self, request, obj, form, change):
         if not change:  # Если это создание нового объекта
@@ -26,6 +28,7 @@ class NewsAdmin(admin.ModelAdmin):
     ordering = ('-published_at',)
     prepopulated_fields = {'slug': ('title',)}
     readonly_fields = ('created_at', 'updated_at')
+    list_select_related = ('author',)
     
     fieldsets = (
         ('Основная информация', {

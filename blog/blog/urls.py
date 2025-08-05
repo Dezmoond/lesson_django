@@ -27,3 +27,8 @@ urlpatterns = [
 # Добавляем маршрут для обслуживания медиа-файлов ТОЛЬКО в режиме разработки
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # Добавляем debug toolbar URLs
+    import debug_toolbar
+    urlpatterns += [
+        path('__debug__/', include(debug_toolbar.urls)),
+    ]

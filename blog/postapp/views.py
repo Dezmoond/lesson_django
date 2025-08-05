@@ -19,13 +19,13 @@ class IndexView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Последние 3 мероприятия
-        context['latest_events'] = Event.objects.filter(
+        # Последние 3 мероприятия с оптимизацией запросов
+        context['latest_events'] = Event.objects.select_related('venue', 'created_by').prefetch_related('ensembles').filter(
             Q(date__gt=date.today()) | (Q(date=date.today()) & Q(time__gte=datetime.now().time()))
         ).order_by('date', 'time')[:3]
         
-        # Последние 5 опубликованных новостей
-        context['latest_news'] = News.objects.filter(is_published=True).order_by('-published_at')[:5]
+        # Последние 5 опубликованных новостей с оптимизацией запросов
+        context['latest_news'] = News.objects.select_related('author').filter(is_published=True).order_by('-published_at')[:5]
         
         return context
 
@@ -39,7 +39,7 @@ class EventsView(ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('venue', 'created_by').prefetch_related('ensembles')
         today = date.today()
         now = datetime.now().time()
 
@@ -93,6 +93,9 @@ class EventDetailView(DetailView):
     slug_field = 'slug'  # Используем поле slug для поиска
     slug_url_kwarg = 'slug'  # Имя параметра в URL
 
+    def get_queryset(self):
+        return super().get_queryset().select_related('venue', 'created_by').prefetch_related('ensembles')
+
 
 # Страница с прошедшими мероприятиями (archive.html)
 class ArchiveView(LoginRequiredMixin, ListView):
@@ -103,7 +106,7 @@ class ArchiveView(LoginRequiredMixin, ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('venue', 'created_by').prefetch_related('ensembles')
         today = date.today()
         now = datetime.now().time()
 
@@ -218,7 +221,7 @@ class NewsListView(ListView):
     paginate_by = 8
     
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('author')
         # Показываем только опубликованные новости
         queryset = queryset.filter(is_published=True)
         
@@ -244,5 +247,5 @@ class NewsDetailView(DetailView):
     slug_url_kwarg = 'slug'
     
     def get_queryset(self):
-        # Показываем только опубликованные новости
-        return News.objects.filter(is_published=True)
+        # Показываем только опубликованные новости с оптимизацией запросов
+        return News.objects.select_related('author').filter(is_published=True)

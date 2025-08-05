@@ -2,6 +2,8 @@ from django.db import models
 from django.utils.text import slugify
 from django.db.models import Q
 from datetime import date, datetime
+from django.core.cache import cache
+from django.utils.functional import cached_property
 
 # Категории событий
 class EventCategory(models.TextChoices):
@@ -37,50 +39,59 @@ class NewsCategory(models.TextChoices):
 class EventManager(models.Manager):
     def upcoming(self):
         """Возвращает предстоящие события"""
+        cache_key = f'events_upcoming_{date.today()}'
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+        
         today = date.today()
         now = datetime.now().time()
-        return self.filter(
+        result = self.select_related('venue', 'created_by').prefetch_related('ensembles').filter(
             Q(date__gt=today) | (Q(date=today) & Q(time__gte=now))
         ).order_by('date', 'time')
+        
+        # Кэшируем на 10 минут
+        cache.set(cache_key, result, 600)
+        return result
     
     def past(self):
         """Возвращает прошедшие события"""
         today = date.today()
         now = datetime.now().time()
-        return self.filter(
+        return self.select_related('venue', 'created_by').prefetch_related('ensembles').filter(
             Q(date__lt=today) | (Q(date=today) & Q(time__lt=now))
         ).order_by('-date', '-time')
     
     def today(self):
         """Возвращает события на сегодня"""
         today = date.today()
-        return self.filter(date=today).order_by('time')
+        return self.select_related('venue', 'created_by').prefetch_related('ensembles').filter(date=today).order_by('time')
     
     def this_week(self):
         """Возвращает события на текущую неделю"""
         from datetime import timedelta
         today = date.today()
         week_end = today + timedelta(days=7)
-        return self.filter(
+        return self.select_related('venue', 'created_by').prefetch_related('ensembles').filter(
             date__gte=today,
             date__lte=week_end
         ).order_by('date', 'time')
     
     def by_category(self, category):
         """Возвращает события по категории"""
-        return self.filter(category=category).order_by('date', 'time')
+        return self.select_related('venue', 'created_by').prefetch_related('ensembles').filter(category=category).order_by('date', 'time')
     
     def by_venue(self, venue_id):
         """Возвращает события по площадке"""
-        return self.filter(venue_id=venue_id).order_by('date', 'time')
+        return self.select_related('venue', 'created_by').prefetch_related('ensembles').filter(venue_id=venue_id).order_by('date', 'time')
     
     def by_ensemble(self, ensemble_id):
         """Возвращает события по коллективу"""
-        return self.filter(ensembles__id=ensemble_id).order_by('date', 'time')
+        return self.select_related('venue', 'created_by').prefetch_related('ensembles').filter(ensembles__id=ensemble_id).order_by('date', 'time')
     
     def search(self, query):
         """Поиск событий по названию и описанию"""
-        return self.filter(
+        return self.select_related('venue', 'created_by').prefetch_related('ensembles').filter(
             Q(name__icontains=query) | 
             Q(description__icontains=query)
         ).order_by('date', 'time')
@@ -89,19 +100,28 @@ class EventManager(models.Manager):
 class NewsManager(models.Manager):
     def published(self):
         """Возвращает только опубликованные новости"""
-        return self.filter(is_published=True).order_by('-published_at')
+        cache_key = 'news_published'
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+        
+        result = self.select_related('author').filter(is_published=True).order_by('-published_at')
+        
+        # Кэшируем на 15 минут
+        cache.set(cache_key, result, 900)
+        return result
     
     def by_category(self, category):
         """Возвращает новости по категории"""
-        return self.published().filter(category=category)
+        return self.select_related('author').published().filter(category=category)
     
     def recent(self, limit=5):
         """Возвращает последние новости"""
-        return self.published()[:limit]
+        return self.select_related('author').published()[:limit]
     
     def search(self, query):
         """Поиск новостей по заголовку и содержанию"""
-        return self.published().filter(
+        return self.select_related('author').published().filter(
             Q(title__icontains=query) | 
             Q(content__icontains=query) |
             Q(excerpt__icontains=query)
@@ -109,7 +129,7 @@ class NewsManager(models.Manager):
     
     def by_author(self, author):
         """Возвращает новости по автору"""
-        return self.published().filter(author=author)
+        return self.select_related('author').published().filter(author=author)
 
 # Место проведения
 class Venue(models.Model):
@@ -195,19 +215,19 @@ class Event(models.Model):
                 counter += 1
         super().save(*args, **kwargs)
 
-    @property
+    @cached_property
     def is_upcoming(self):
         """Проверяет, является ли событие предстоящим"""
         today = date.today()
         now = datetime.now().time()
         return (self.date > today) or (self.date == today and self.time >= now)
     
-    @property
+    @cached_property
     def is_today(self):
         """Проверяет, происходит ли событие сегодня"""
         return self.date == date.today()
     
-    @property
+    @cached_property
     def is_past(self):
         """Проверяет, является ли событие прошедшим"""
         today = date.today()
@@ -265,7 +285,7 @@ class News(models.Model):
         from django.urls import reverse
         return reverse('blog:news_detail', kwargs={'slug': self.slug})
     
-    @property
+    @cached_property
     def reading_time(self):
         """Примерное время чтения новости (в минутах)"""
         words_per_minute = 200
